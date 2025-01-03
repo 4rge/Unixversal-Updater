@@ -12,9 +12,9 @@ setup() {
   echo "set_pkg_manager() { pkg_manager='apt'; }" >> /tmp/script.sh
 
   echo "set_update_upgrade_cmds() { update_cmd='echo apt update'; upgrade_cmd='echo apt upgrade -y'; }" >> /tmp/script.sh
-  echo "update_packages() { eval \"\$update_cmd\" && msg GREEN 'Repositories updated successfully.' || msg RED 'Failed to update repositories.'; eval \"\$upgrade_cmd\" && msg GREEN 'Packages upgraded successfully.' || msg RED 'Failed to upgrade packages.'; }" >> /tmp/script.sh
-  echo "install_microcode() { msg GREEN 'Microcode installed successfully for Intel Xeon.'; }" >> /tmp/script.sh
-  echo "identify_gpu() { msg RED 'No GPU detected.'; }" >> /tmp/script.sh
+  echo "update_packages() { eval \"\$update_cmd\" && msg 2 'Repositories updated successfully.' || msg 1 'Failed to update repositories.'; eval \"\$upgrade_cmd\" && msg 2 'Packages upgraded successfully.' || msg 1 'Failed to upgrade packages.'; }" >> /tmp/script.sh
+  echo "install_microcode() { msg 2 'Microcode installed successfully for Intel Xeon.'; }" >> /tmp/script.sh
+  echo "identify_gpu() { msg 1 'No GPU detected.'; }" >> /tmp/script.sh
 
   chmod +x /tmp/script.sh
   export PATH="/tmp:$PATH"
@@ -57,8 +57,10 @@ teardown() {
 @test "Identify GPU" {
   run /tmp/script.sh -c "identify_gpu"
   [ "$status" -eq 0 ]
-  [ "$output" = "No GPU detected." ]
+  [ "$output" == "$(tput setaf 1)No GPU detected.$(tput sgr0)" ]
 }
 
 @test "Respond to missing utilities correctly" {
-  run /tmp/script.sh -c "command -v lspci;
+  run /tmp/script.sh -c "command -v lspci"
+  [ "$status" -eq 0 ]
+}
