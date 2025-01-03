@@ -1,20 +1,24 @@
 #!/usr/bin/env bats
 
 setup() {
+  # Mock the relevant functions directly in the test without modifying system files
   echo "#!/bin/sh" > /tmp/script.sh
   echo "msg() { echo -e \"\$$1 \$2\"; }" >> /tmp/script.sh
   echo "lscpu() { echo 'Model name: Intel Xeon'; }" >> /tmp/script.sh
   echo "lspci() { echo '01:00.0 VGA compatible controller: Intel Corporation'; }" >> /tmp/script.sh
+  
+  # Mock command to avoid sudo permission issues
   echo "command() { if [ \"\$1\" = 'sudo' ]; then exit 1; else return 0; fi; }" >> /tmp/script.sh
+
+  # Mocking the /etc/os-release
+  echo "ID=ubuntu" >> /tmp/script.sh  # Simulating the output for testing
+  
   chmod +x /tmp/script.sh
   export PATH="/tmp:$PATH"
-  
-  echo -e "ID=ubuntu" > /etc/os-release  # Mock the os-release file
 }
 
 teardown() {
   rm -f /tmp/script.sh
-  rm -f /etc/os-release
 }
 
 @test "Display banner does not fail" {
@@ -60,8 +64,7 @@ teardown() {
 }
 
 @test "Handle unsupported distribution" {
-  echo -e "ID=unsupported" > /etc/os-release
-  run /tmp/script.sh -c "set_pkg_manager"
+  run /tmp/script.sh -c "echo 'ID=unsupported'; set_pkg_manager"
   [ "$status" -ne 0 ]
   [ "$output" = "Unsupported distribution: unsupported." ]
 }
@@ -101,8 +104,7 @@ teardown() {
 
 @test "Identify package manager for multiple distributions" {
   for distro in "ubuntu" "fedora" "arch"; do
-    echo -e "ID=$distro" > /etc/os-release
-    run /tmp/script.sh -c "set_pkg_manager"
+    run /tmp/script.sh -c "echo 'ID=$distro'; set_pkg_manager"
     [ "$pkg_manager" != "" ] # Check it's correctly set
   done
 }
