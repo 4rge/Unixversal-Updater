@@ -31,7 +31,7 @@ teardown() {
 
 @test "Display message in red" {
   run /tmp/script.sh -c "msg 1 'Test message'"
-  [ "$output" == "Test message" ]
+  [ "$output" = "Test message" ]  # Use '=' for string comparison in BASH
 }
 
 @test "Check necessary utilities" {
@@ -41,7 +41,7 @@ teardown() {
 
 @test "Identify package manager as apt" {
   run /tmp/script.sh -c "set_pkg_manager; echo \$pkg_manager"
-  [ "$output" = "apt" ]
+  [ "$output" = "apt" ]  # Check that the output is "apt"
 }
 
 @test "Update packages function runs without failure" {
@@ -57,7 +57,7 @@ teardown() {
 @test "Identify GPU" {
   run /tmp/script.sh -c "identify_gpu"
   [ "$status" -eq 0 ]
-  [ "$output" == "No GPU detected." ]
+  [ "$output" = "No GPU detected." ]
 }
 
 @test "Respond to missing utilities correctly" {
