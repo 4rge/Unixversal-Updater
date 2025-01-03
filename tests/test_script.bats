@@ -57,8 +57,45 @@ teardown() {
 @test "Identify GPU" {
   run /tmp/script.sh -c "identify_gpu"
   [ "$status" -eq 0 ]
-  [ "$output" = "No GPU detected." ]
+  [ "$output" == "No GPU detected." ] # Ensure this logical condition checks correctly
 }
 
 @test "Respond to missing utilities correctly" {
-  run /tmp/script.sh -c "command -v lspci;
+  run /tmp/script.sh -c "command -v lspci; exit 1"
+  [ "$status" -ne 0 ]
+  [ "$output" == "lspci not installed. Exiting." ]
+}
+
+@test "Handle unsupported distribution" {
+  run /tmp/script.sh -c "ID=unsupported; set_pkg_manager"
+  [ "$status" -ne 0 ]
+  [ "$output" == "Unsupported distribution: unsupported." ]
+}
+
+@test "Simulate microcode installation" {
+  run /tmp/script.sh -c "install_microcode"
+  [ "$status" -eq 0 ]
+}
+
+@test "Failed update command" {
+  run /tmp/script.sh -c "echo 'failed command' && false"
+  [ "$status" -ne 0 ]
+  [ "$output" == "Failed to update repositories." ]
+}
+
+@test "Success message output color verification" {
+  run /tmp/script.sh -c "msg 2 'Success Message'"
+  [[ "$output" == *"\033[0;32mSuccess Message\033[0m"* ]]
+}
+
+@test "Error message output color verification" {
+  run /tmp/script.sh -c "msg 1 'Error Message'"
+  [[ "$output" == *"\033[0;31mError Message\033[0m"* ]]
+}
+
+@test "Identify package manager for multiple distributions" {
+  for distro in "ubuntu" "fedora" "arch"; do
+    run /tmp/script.sh -c "ID=$distro; set_pkg_manager"
+    [ "$pkg_manager" != "" ] 
+  done
+}
