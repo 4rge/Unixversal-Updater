@@ -5,6 +5,7 @@ setup() {
   echo "msg() { echo -e \"\$$1 \$2\"; }" >> /tmp/script.sh
   echo "lscpu() { echo 'Model name: Intel Xeon'; }" >> /tmp/script.sh
   echo "lspci() { echo '01:00.0 VGA compatible controller: Intel Corporation'; }" >> /tmp/script.sh
+  echo "command() { if [ \"\$1\" = 'sudo' ]; then exit 1; else return 0; fi; }" >> /tmp/script.sh
   chmod +x /tmp/script.sh
   export PATH="/tmp:$PATH"
   
