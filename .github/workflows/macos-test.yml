@@ -21,4 +21,4 @@ jobs:
           brew install bats-core
 
       - name: Run BATS tests
-        run: bats tests/test_script.bats
+        run: bats tests/test_script_macos.bats
