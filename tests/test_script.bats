@@ -27,7 +27,8 @@ check_virtualization() {
 
 set_pkg_manager() {
   pkg_manager='apt'
-  echo "DEBUG: pkg_manager set to: $pkg_manager"
+  echo "DEBUG: pkg_manager set to: $pkg_manager"  # Ensure this is captured in debug output
+  echo "$pkg_manager"  # Output the package manager for testing
 }
 
 set_update_upgrade_cmds() {
@@ -73,7 +74,9 @@ teardown() {
 }
 
 @test "Identify package manager as apt" {
-  run /tmp/script.sh -c "set_pkg_manager; echo \$pkg_manager"
+  run /tmp/script.sh -c "set_pkg_manager"
+  # Capture the output of pkg_manager
+  output=$(run /tmp/script.sh -c "set_pkg_manager; echo \$pkg_manager")
   echo "DEBUG: pkg_manager output was: [$output]"
   [ "$output" = "apt" ]
 }
