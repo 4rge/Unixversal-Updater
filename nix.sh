@@ -130,7 +130,7 @@ install_microcode() {
 identify_gpu() {
   GPU_MODEL=$(lspci | grep -i vga | awk -F ': ' '{print $2}')
   if [ -n "$GPU_MODEL" ]; then
-    msg GREEN "Detected GPU: $GPU_MODEL"
+    msg GREEN "Detected GPU: $GPU_MODEL."
   else
     msg RED "No GPU detected."
   fi
