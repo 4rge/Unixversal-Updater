@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main  # Triggers the workflow on direct pushes to the main branch
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: 'Base branch to check for modified files (default: main)'
+        required: false
+        default: 'main'
 
 jobs:
   security:
@@ -49,8 +55,8 @@ jobs:
         run: |
           set -e
           echo "Detecting modified files..."
-          git fetch origin main
-          git diff --name-only origin/main...HEAD | \
+          git fetch origin ${{ github.event.inputs.base_branch }}
+          git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
           grep -E '\.(py|js|sh|go|php|c|cpp|r|rb|Dockerfile|rs)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
           echo "Modified files: $(cat modified_files.txt)"
 
@@ -115,7 +121,7 @@ jobs:
           path: security_testing_summary.md
 
       - name: Notify on Slack
-        if: failure() && secrets.SLACK_WEBHOOK_URL != '' 
+        if: failure() && env.SLACK_WEBHOOK_URL != ''
         uses: slackapi/slack-github-action@v1.16.0
         with:
           status: 'failure'
