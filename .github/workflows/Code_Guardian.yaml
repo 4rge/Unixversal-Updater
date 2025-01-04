@@ -22,6 +22,8 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    env:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
       - name: Cache Linters
@@ -129,11 +131,13 @@ jobs:
             "${{ github.event.pull_request.comments_url }}"
 
       - name: Notify on Slack
-        if: failure() && secrets.SLACK_WEBHOOK_URL != ''
+        if: failure()
         run: |
-          curl -X POST -H "Content-Type: application/json" \
-            -d "{\"text\": \"Linting Errors Detected in PR #${{ github.event.number }}! Please check the summary report for specific errors. Summary report [here](https://github.com/${{ github.repository }}/actions/artifacts/linting-summary).\"}" \
-            "${{ secrets.SLACK_WEBHOOK_URL }}"
+          if [[ -n "${{ env.SLACK_WEBHOOK_URL }}" ]]; then
+            curl -X POST -H "Content-Type: application/json" \
+              -d "{\"text\": \"Linting Errors Detected in PR #${{ github.event.number }}! Please check the summary report for specific errors. Summary report [here](https://github.com/${{ github.repository }}/actions/artifacts/linting-summary).\"}" \
+              "${{ env.SLACK_WEBHOOK_URL }}"
+          fi
         
       - name: Cleanup Temporary Files
         run: |
