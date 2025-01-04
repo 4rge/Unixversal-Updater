@@ -63,8 +63,11 @@ jobs:
           # Fetch all branches
           git fetch --all
           
-          # Check if we can find the base branch
+          # Use "main" as default if base_branch is empty
           base_branch="${{ github.event.inputs.base_branch }}"
+          [ -z "$base_branch" ] && base_branch="main"
+
+          # Check if we can find the base branch
           if git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
             git diff --name-only "origin/$base_branch"..."HEAD" | \
             grep -E '\.(py|js|sh|go|php|c|cpp|rb)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
