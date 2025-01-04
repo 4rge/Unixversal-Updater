@@ -1,0 +1,152 @@
+name: Security Automation Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      base_branch:
+        description: 'Base branch to check for modified files (default: main)'
+        required: false
+        default: 'main'
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.x'
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.0' # Change as needed
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16' # Change as needed
+
+      - name: Install Security Tools
+        run: |
+          set -e  # Exit immediately if a command exits with a non-zero status
+          pip install bandit || exit 1
+          go install github.com/securego/gosec/v2@latest || exit 1
+          composer global require phpstan/phpstan || exit 1
+          composer global require vimeo/psalm || exit 1
+          npm install -g snyk eslint npm-audit || exit 1
+          rustup update || exit 1
+          cargo install cargo-audit || exit 1
+          gem install brakeman || exit 1
+
+          sudo apt-get install -y hadolint shellcheck cppcheck clang-tools || exit 1
+
+      - name: Detect Modified Files
+        id: detect_files
+        run: |
+          set -e
+          echo "Detecting modified files..."
+          git fetch origin ${{ github.event.inputs.base_branch }}
+          git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
+          grep -E '\.(py|js|sh|go|php|c|cpp|r|rb|Dockerfile|rs)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
+          echo "Modified files: $(cat modified_files.txt)"
+
+      - name: Run Security Tests
+        id: security_tests
+        run: |
+          set -e
+          error_flag=0
+          summary_report="## Security Testing Summary Report\n"
+          summary_report+="| File | Tool | Issues |\n"
+          summary_report+="|------|------|--------|\n"
+          details_file="security_details.md"
+
+          scan_file() {
+            local file="$1"
+            local tool="$2"
+            output=$($tool "$file" || echo "Tool execution failed")  # Capture output while preventing failure
+            exit_status=$?
+            if [ $exit_status -ne 0 ]; then
+              error_flag=1
+              issue_count=$(echo "$output" | wc -l)
+              summary_report+="| $file | $(basename "$tool") | $issue_count |\n"
+              echo "::error file=$file::Security tool output:\n\`\`\`\n$output\n\`\`\`" # GitHub annotation
+              echo -e "## Tool output for $file\n\`\`\`\n$output\n\`\`\`" >> "$details_file"
+            fi
+          }
+
+          if [[ -e modified_files.txt && -s modified_files.txt ]]; then
+            while read -r file; do
+              case "$file" in
+                *.py) scan_file "$file" "bandit -r $(dirname "$file")" ;;  
+                *.js) scan_file "$file" "snyk test --all-projects && npm audit" ;; 
+                *.sh) scan_file "$file" "shellcheck \"$file\"" ;;           
+                Dockerfile) scan_file "$file" "hadolint \"$file\"" ;;       
+                *.go) scan_file "$file" "gosec -quiet -fmt=json \"$file\"" ;;  
+                *.php) scan_file "$file" "phpstan analyse \"$file\" && psalm \"$file\"" ;;  
+                *.c) scan_file "$file" "cppcheck \"$file\"" ;;              
+                *.cpp) scan_file "$file" "cppcheck \"$file\"" ;;            
+                *.rb) scan_file "$file" "brakeman -o output.json -A all; cat output.json" ;; 
+                *.rs) scan_file "$file" "cargo audit" ;;                   
+                *.r) scan_file "$file" "lintr \"$file\"" ;;                
+              esac
+            done < modified_files.txt
+          else
+            echo "No relevant modified files detected."
+          fi
+
+          if [ $error_flag -ne 0 ]; then
+            echo -e "$summary_report" > security_testing_summary.md
+            echo "Security issues detected. Check the summary report."
+            exit 1
+          else
+            summary_report+="| All scripts | Success | 0 |\n"
+            echo -e "$summary_report" > security_testing_summary.md
+            echo "No security issues detected!"
+          fi
+
+      - name: Upload Security Testing Summary Report
+        uses: actions/upload-artifact@v2
+        with:
+          name: security-testing-summary
+          path: security_testing_summary.md
+
+      - name: Comment on Pull Request
+        if: failure() 
+        run: |
+          REPORT_URL="${{ github.event.pull_request.html_url }}"
+          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -d "{\"body\": \"Security scan failed! Check the report [here](${REPORT_URL}) for details.\"}" \
+            "${{ github.event.pull_request.comments_url }}"
+
+      - name: Notify on Slack
+        if: failure() && secrets.SLACK_WEBHOOK_URL != '' 
+        uses: slackapi/slack-github-action@v1.16.0
+        with:
+          status: 'failure'
+          channels: 'YOUR_CHANNEL_ID_HERE'
+          customPayload: |
+            {
+              "text": "Security Issues Detected in PR #${{ github.event.number }}!",
+              "attachments": [
+                {
+                  "text": "Please check the summary report for specific issues. Summary report [here](https://github.com/${{ github.repository }}/actions/artifacts/security-testing-summary)."
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Cleanup Temporary Files
+        run: |
+          echo "Cleaning up temporary files..."
+          rm -f modified_files.txt security_details.md || true  # Ignore errors if files do not exist
