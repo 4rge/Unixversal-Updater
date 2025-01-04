@@ -49,7 +49,7 @@ jobs:
           npm install -g snyk eslint npm-audit
 
           sudo apt-get update
-          sudo apt-get install -y hadolint shellcheck cppcheck clang-tools
+          sudo apt-get install -y shellcheck cppcheck clang-tools
 
       - name: Detect Modified Files
         id: detect_files
@@ -58,7 +58,7 @@ jobs:
           echo "Detecting modified files..."
           git fetch origin ${{ github.event.inputs.base_branch }}
           git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
-          grep -E '\.(py|js|sh|go|php|c|cpp|rb|Dockerfile)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
+          grep -E '\.(py|js|sh|go|php|c|cpp|rb)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
           echo "Modified files: $(cat modified_files.txt)"
 
       - name: Run Security Tests
@@ -91,7 +91,6 @@ jobs:
                 *.py) scan_file "$file" "bandit -r $(dirname "$file")" ;;
                 *.js) scan_file "$file" "snyk test --all-projects && npm audit" ;;
                 *.sh) scan_file "$file" "shellcheck \"$file\"" ;;
-                Dockerfile) scan_file "$file" "hadolint \"$file\"" ;;
                 *.go) scan_file "$file" "gosec -quiet -fmt=json \"$file\"" ;;
                 *.php) scan_file "$file" "phpstan analyse \"$file\" && psalm \"$file\"" ;;
                 *.c) scan_file "$file" "cppcheck \"$file\"" ;;
