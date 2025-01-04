@@ -40,7 +40,7 @@ jobs:
         run: |
           set -e  # Exit immediately if a command exits with a non-zero status
           pip install bandit || exit 1
-          go install github.com/securego/gosec/v2@latest || exit 1
+          go install github.com/securego/gosec/v2/cmd/gosec@latest || exit 1  # Corrected to point to the main package
           composer global require phpstan/phpstan || exit 1
           composer global require vimeo/psalm || exit 1
           npm install -g snyk eslint npm-audit || exit 1
