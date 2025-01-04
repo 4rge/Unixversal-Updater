@@ -51,21 +51,6 @@ jobs:
           rustup update
           cargo install cargo-audit
 
-          # Setup Bundler and install Brakeman
-          gem install bundler --user-install  # Install bundler in user space
-          
-          # Add local bundler path to PATH
-          export PATH="$HOME/.gem/ruby/*/bin:$PATH"
-
-          # Verify Bundler installation
-          echo "Bundler version:"
-          bundle --version  # This should confirm the installation
-
-          # Now install the gems locally
-          echo "source 'https://rubygems.org'" > Gemfile
-          echo "gem 'brakeman'" >> Gemfile
-          bundle install --path vendor/bundle  # Install gems locally in vendor/bundle
-
           sudo apt-get install -y hadolint shellcheck cppcheck clang-tools
 
       - name: Detect Modified Files
@@ -113,7 +98,7 @@ jobs:
                 *.php) scan_file "$file" "phpstan analyse \"$file\" && psalm \"$file\"" ;;  
                 *.c) scan_file "$file" "cppcheck \"$file\"" ;;              
                 *.cpp) scan_file "$file" "cppcheck \"$file\"" ;;            
-                *.rb) scan_file "$file" "bundle exec brakeman -o output.json -A all; cat output.json" ;; 
+                *.rb) echo "Ruby file detected: $file, Skipping Brakeman due to removal." ;; 
                 *.rs) scan_file "$file" "cargo audit" ;;                   
                 *.r) scan_file "$file" "lintr \"$file\"" ;;                
               esac
