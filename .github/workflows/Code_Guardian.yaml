@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       files:
@@ -37,9 +40,11 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Linters
+      - name: Install Dependencies
         run: |
-          pip install shellcheck flake8 eslint rubocop codeclimate-test-reporter
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          pip install flake8 eslint rubocop codeclimate-test-reporter
 
       - name: Validate Configuration Files
         run: |
@@ -123,7 +128,7 @@ jobs:
           path: linting_summary.md
 
       - name: Comment on Pull Request
-        if: failure()
+        if: failure() && github.event_name == 'pull_request'
         run: |
           REPORT_URL="${{ github.event.pull_request.html_url }}"
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
