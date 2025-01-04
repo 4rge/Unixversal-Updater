@@ -61,17 +61,26 @@ jobs:
           echo "Detecting modified files..."
           
           # Fetch all branches
-          git fetch --all
+          git fetch --all || { echo "Git fetch failed"; exit 1; }
           
           # Use "main" as default if base_branch is empty
           base_branch="${{ github.event.inputs.base_branch }}"
           [ -z "$base_branch" ] && base_branch="main"
+          echo "Checking for base branch: $base_branch"
+          git branch -a  # List all branches
 
           # Check if we can find the base branch
           if git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
-            git diff --name-only "origin/$base_branch"..."HEAD" | \
-            grep -E '\.(py|js|sh|go|php|c|cpp|rb|yaml|yml)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
-            echo "Modified files: $(cat modified_files.txt)"
+            modified_files=$(git diff --name-only "origin/$base_branch"..."HEAD")
+            echo "Modified files (raw output): $modified_files"
+            echo "$modified_files" | grep -E '\.(py|js|sh|go|php|c|cpp|rb|yaml|yml)$' > modified_files.txt
+            
+            if [[ -s modified_files.txt ]]; then
+              echo "Modified files: $(cat modified_files.txt)"
+            else
+              echo "No relevant modified files detected."
+              exit 0  # Exit gracefully if no relevant files
+            fi
           else
             echo "Base branch '$base_branch' not found"
             exit 1
@@ -112,7 +121,6 @@ jobs:
                 *.c) scan_file "$file" "cppcheck \"$file\"" ;;
                 *.cpp) scan_file "$file" "cppcheck \"$file\"" ;;
                 *.rb) echo "Ruby file detected: $file, Skipping Brakeman due to removal." ;;
-                # *.yaml and *.yml are already being picked up
               esac
             done < modified_files.txt
           else
