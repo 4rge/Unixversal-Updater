@@ -3,7 +3,7 @@ name: Security Automation Tests
 on:
   push:
     branches:
-      - main
+      - main  # Triggers the workflow on direct pushes to the main branch
 
 jobs:
   security:
@@ -49,8 +49,8 @@ jobs:
         run: |
           set -e
           echo "Detecting modified files..."
-          git fetch origin ${{ github.event.inputs.base_branch }}
-          git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
+          git fetch origin main
+          git diff --name-only origin/main...HEAD | \
           grep -E '\.(py|js|sh|go|php|c|cpp|r|rb|Dockerfile|rs)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
           echo "Modified files: $(cat modified_files.txt)"
 
@@ -114,14 +114,6 @@ jobs:
           name: security-testing-summary
           path: security_testing_summary.md
 
-      - name: Comment on Pull Request
-        if: failure() 
-        run: |
-          REPORT_URL="${{ github.event.pull_request.html_url }}"
-          curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -d "{\"body\": \"Security scan failed! Check the report [here](${REPORT_URL}) for details.\"}" \
-            "${{ github.event.pull_request.comments_url }}"
-
       - name: Notify on Slack
         if: failure() && secrets.SLACK_WEBHOOK_URL != '' 
         uses: slackapi/slack-github-action@v1.16.0
@@ -130,7 +122,7 @@ jobs:
           channels: 'YOUR_CHANNEL_ID_HERE'
           customPayload: |
             {
-              "text": "Security Issues Detected in PR #${{ github.event.number }}!",
+              "text": "Security Issues Detected in Push to Main!",
               "attachments": [
                 {
                   "text": "Please check the summary report for specific issues. Summary report [here](https://github.com/${{ github.repository }}/actions/artifacts/security-testing-summary)."
