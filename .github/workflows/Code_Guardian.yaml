@@ -16,7 +16,7 @@ on:
       linters:
         description: 'Comma-separated list of linters to run (optional)'
         required: false
-        default: 'shellcheck,flake8,eslint,rubocop'
+        default: 'shellcheck,flake8,eslint'
       base_branch:
         description: 'Base branch to check for modified files (default: main)'
         required: false
@@ -29,7 +29,7 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
-      - name: Cache Linters
+      - name: Cache Python Packages
         uses: actions/cache@v2
         with:
           path: ~/.cache/pip
@@ -40,11 +40,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Ruby
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ruby
-
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
@@ -54,13 +49,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y shellcheck
-          pip install flake8 codeclimate-test-reporter  # Removed rubocop here
+          pip install flake8 codeclimate-test-reporter  # Install flake8 and codeclimate-test-reporter
           npm install -g eslint  # Install eslint globally
-          gem install rubocop  # Install rubocop using gem
 
       - name: Validate Configuration Files
         run: |
-          for config in .flake8 .eslintrc.json .rubocop.yml .codeclimate.yml; do
+          for config in .flake8 .eslintrc.json .codeclimate.yml; do
             if [[ -f "$config" ]]; then
               echo "Validating $config"
               if ! jq empty "$config" &>/dev/null; then
@@ -73,7 +67,7 @@ jobs:
       - name: Prepare Lint Configuration
         run: |
           echo "Merging configurations..." > config_merge.log
-          for config in .flake8 .eslintrc.json .rubocop.yml .codeclimate.yml; do
+          for config in .flake8 .eslintrc.json .codeclimate.yml; do
             if [ -f "$config" ]; then
               cp "$config" "${config%.*}_config.yml"
               echo "Detected and merged configuration for $config." >> config_merge.log
@@ -87,7 +81,7 @@ jobs:
           echo "Detecting modified files..."
           git fetch origin ${{ github.event.inputs.base_branch }}
           git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
-          grep -E '\.(sh|py|js|rb)$' > modified_files.txt
+          grep -E '\.(sh|py|js)$' > modified_files.txt
           echo "Modified files: $(cat modified_files.txt)"
 
       - name: Lint Selected Files
@@ -119,7 +113,6 @@ jobs:
               *.sh) lint_file "$file" "shellcheck" ;;
               *.py) lint_file "$file" "flake8" ;;
               *.js) lint_file "$file" "eslint" ;;
-              *.rb) lint_file "$file" "rubocop" ;;
             esac
           done < modified_files.txt
         
