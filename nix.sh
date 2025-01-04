@@ -7,7 +7,7 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
 
-# Function to display messages with color coding 
+# Function to display messages with color coding
 msg() {
   echo -e "${!1}$2${RESET}"
 }
