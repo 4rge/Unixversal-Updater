@@ -51,11 +51,12 @@ jobs:
           rustup update
           cargo install cargo-audit
 
-          # Set up Bundler and install Brakeman
+          # Setup Bundler and install Brakeman
           echo "source 'https://rubygems.org'" > Gemfile
           echo "gem 'brakeman'" >> Gemfile
-          gem install bundler
-          bundle install --path vendor/bundle  # Install gems in a local directory
+          gem install bundler --user-install  # Install bundler in user space
+          export PATH="$HOME/.gem/ruby/*/bin:$PATH"  # Add local gem bin to PATH
+          bundle install --path vendor/bundle  # Install gems locally in vendor/bundle
 
           sudo apt-get install -y hadolint shellcheck cppcheck clang-tools
 
