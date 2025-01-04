@@ -71,16 +71,19 @@ jobs:
 
           # Check if we can find the base branch
           if git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
+            # Get the list of modified files
             modified_files=$(git diff --name-only "origin/$base_branch"..."HEAD")
-            echo "Modified files (raw output): $modified_files"
-            echo "$modified_files" | grep -E '\.(py|js|sh|go|php|c|cpp|rb|yaml|yml)$' > modified_files.txt
-            
-            if [[ -s modified_files.txt ]]; then
-              echo "Modified files: $(cat modified_files.txt)"
-            else
-              echo "No relevant modified files detected."
+
+            # Check if modified files is empty
+            if [[ -z "$modified_files" ]]; then
+              echo "No modified files detected between origin/$base_branch and HEAD."
               exit 0  # Exit gracefully if no relevant files
+            else
+              echo "Modified files (raw output): $modified_files"
+              echo "$modified_files" | grep -E '\.(py|js|sh|go|php|c|cpp|rb|yaml|yml)$' > modified_files.txt
+              echo "Filtered modified files: $(cat modified_files.txt)"
             fi
+            
           else
             echo "Base branch '$base_branch' not found"
             exit 1
@@ -121,6 +124,7 @@ jobs:
                 *.c) scan_file "$file" "cppcheck \"$file\"" ;;
                 *.cpp) scan_file "$file" "cppcheck \"$file\"" ;;
                 *.rb) echo "Ruby file detected: $file, Skipping Brakeman due to removal." ;;
+                # *.yaml and *.yml are already being picked up
               esac
             done < modified_files.txt
           else
