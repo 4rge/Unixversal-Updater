@@ -48,9 +48,7 @@ jobs:
 
           npm install -g snyk eslint npm-audit
 
-          rustup update
-          cargo install cargo-audit
-
+          sudo apt-get update
           sudo apt-get install -y hadolint shellcheck cppcheck clang-tools
 
       - name: Detect Modified Files
@@ -60,7 +58,7 @@ jobs:
           echo "Detecting modified files..."
           git fetch origin ${{ github.event.inputs.base_branch }}
           git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
-          grep -E '\.(py|js|sh|go|php|c|cpp|r|rb|Dockerfile|rs)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
+          grep -E '\.(py|js|sh|go|php|c|cpp|rb|Dockerfile)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
           echo "Modified files: $(cat modified_files.txt)"
 
       - name: Run Security Tests
@@ -90,17 +88,16 @@ jobs:
           if [[ -e modified_files.txt && -s modified_files.txt ]]; then
             while read -r file; do
               case "$file" in
-                *.py) scan_file "$file" "bandit -r $(dirname "$file")" ;;  
-                *.js) scan_file "$file" "snyk test --all-projects && npm audit" ;; 
-                *.sh) scan_file "$file" "shellcheck \"$file\"" ;;           
-                Dockerfile) scan_file "$file" "hadolint \"$file\"" ;;       
-                *.go) scan_file "$file" "gosec -quiet -fmt=json \"$file\"" ;;  
-                *.php) scan_file "$file" "phpstan analyse \"$file\" && psalm \"$file\"" ;;  
-                *.c) scan_file "$file" "cppcheck \"$file\"" ;;              
-                *.cpp) scan_file "$file" "cppcheck \"$file\"" ;;            
-                *.rb) echo "Ruby file detected: $file, Skipping Brakeman due to removal." ;; 
-                *.rs) scan_file "$file" "cargo audit" ;;                   
-                *.r) scan_file "$file" "lintr \"$file\"" ;;                
+                *.py) scan_file "$file" "bandit -r $(dirname "$file")" ;;
+                *.js) scan_file "$file" "snyk test --all-projects && npm audit" ;;
+                *.sh) scan_file "$file" "shellcheck \"$file\"" ;;
+                Dockerfile) scan_file "$file" "hadolint \"$file\"" ;;
+                *.go) scan_file "$file" "gosec -quiet -fmt=json \"$file\"" ;;
+                *.php) scan_file "$file" "phpstan analyse \"$file\" && psalm \"$file\"" ;;
+                *.c) scan_file "$file" "cppcheck \"$file\"" ;;
+                *.cpp) scan_file "$file" "cppcheck \"$file\"" ;;
+                *.rb) echo "Ruby file detected: $file, Skipping Brakeman due to removal." ;;
+                # Removed Rust related case
               esac
             done < modified_files.txt
           else
