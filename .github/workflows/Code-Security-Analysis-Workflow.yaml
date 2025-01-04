@@ -1,15 +1,9 @@
 name: Security Automation Tests
 
 on:
-  pull_request:
+  push:
     branches:
       - main
-  workflow_dispatch:
-    inputs:
-      base_branch:
-        description: 'Base branch to check for modified files (default: main)'
-        required: false
-        default: 'main'
 
 jobs:
   security:
