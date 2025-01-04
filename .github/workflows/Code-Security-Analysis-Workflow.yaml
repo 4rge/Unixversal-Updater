@@ -59,10 +59,20 @@ jobs:
         run: |
           set -e
           echo "Detecting modified files..."
-          git fetch origin ${{ github.event.inputs.base_branch }} --no-tags
-          git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
-          grep -E '\.(py|js|sh|go|php|c|cpp|rb)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
-          echo "Modified files: $(cat modified_files.txt)"
+          
+          # Fetch all branches
+          git fetch --all
+          
+          # Check if we can find the base branch
+          base_branch="${{ github.event.inputs.base_branch }}"
+          if git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
+            git diff --name-only "origin/$base_branch"..."HEAD" | \
+            grep -E '\.(py|js|sh|go|php|c|cpp|rb)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
+            echo "Modified files: $(cat modified_files.txt)"
+          else
+            echo "Base branch '$base_branch' not found"
+            exit 1
+          fi
 
       - name: Run Security Tests
         id: security_tests
