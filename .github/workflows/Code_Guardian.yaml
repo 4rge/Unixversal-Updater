@@ -29,6 +29,9 @@ jobs:
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
       - name: Cache Python Packages
         uses: actions/cache@v2
         with:
@@ -43,7 +46,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '18'  # Specify the Node.js version you want
+          node-version: '18' # Specify the Node.js version you want
 
       - name: Install Dependencies
         run: |
@@ -78,11 +81,30 @@ jobs:
       - name: Detect Modified Files
         id: detect_files
         run: |
+          set -e
           echo "Detecting modified files..."
-          git fetch origin ${{ github.event.inputs.base_branch }}
-          git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
-          grep -E '\.(sh|py|js)$' > modified_files.txt
-          echo "Modified files: $(cat modified_files.txt)"
+          git fetch --all || { echo "Git fetch failed"; exit 1; }
+          
+          # Use the base_branch input or default to main
+          base_branch="${{ github.event.inputs.base_branch }}"
+          [ -z "$base_branch" ] && base_branch="main"
+          echo "Checking for base branch: $base_branch"
+
+          # Check if we can find the base branch
+          if git show-ref --verify --quiet "refs/remotes/origin/$base_branch"; then
+            modified_files=$(git diff --name-only "origin/$base_branch"..."HEAD")
+
+            if [[ -z "$modified_files" ]]; then
+              echo "No modified files detected between origin/$base_branch and HEAD."
+              exit 0
+            else
+              echo "$modified_files" | grep -E '\.(sh|py|js)$' > modified_files.txt
+              echo "Filtered modified files: $(cat modified_files.txt)"
+            fi
+          else
+            echo "Base branch '$base_branch' not found"
+            exit 1
+          fi
 
       - name: Lint Selected Files
         id: lint
@@ -108,14 +130,16 @@ jobs:
             fi
           }
           
-          while read -r file; do
-            case "$file" in
-              *.sh) lint_file "$file" "shellcheck" ;;
-              *.py) lint_file "$file" "flake8" ;;
-              *.js) lint_file "$file" "eslint" ;;
-            esac
-          done < modified_files.txt
-        
+          if [[ -e modified_files.txt && -s modified_files.txt ]]; then
+            while read -r file; do
+              case "$file" in
+                *.sh) lint_file "$file" "shellcheck" ;;
+                *.py) lint_file "$file" "flake8" ;;
+                *.js) lint_file "$file" "eslint" ;;
+              esac
+            done < modified_files.txt
+          fi
+
           if [ $error_flag -ne 0 ]; then
             echo -e "$summary_report" > linting_summary.md
             echo "Linting errors detected. Check the summary report."
