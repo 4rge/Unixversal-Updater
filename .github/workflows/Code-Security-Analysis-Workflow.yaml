@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3  # Use a specific checkout action version
+        uses: actions/checkout@v3
       
       - name: Set up Python
         uses: actions/setup-python@v2
@@ -59,7 +59,7 @@ jobs:
         run: |
           set -e
           echo "Detecting modified files..."
-          git fetch origin ${{ github.event.inputs.base_branch }}
+          git fetch origin ${{ github.event.inputs.base_branch }} --no-tags
           git diff --name-only origin/${{ github.event.inputs.base_branch }}...HEAD | \
           grep -E '\.(py|js|sh|go|php|c|cpp|rb)$' > modified_files.txt || { echo "Error detecting files"; exit 1; }
           echo "Modified files: $(cat modified_files.txt)"
