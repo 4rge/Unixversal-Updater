@@ -39,16 +39,25 @@ jobs:
       - name: Install Security Tools
         run: |
           set -e  # Exit immediately if a command exits with a non-zero status
-          pip install bandit || exit 1
-          go install github.com/securego/gosec/v2/cmd/gosec@latest || exit 1  # Corrected to point to the main package
-          composer global require phpstan/phpstan || exit 1
-          composer global require vimeo/psalm || exit 1
-          npm install -g snyk eslint npm-audit || exit 1
-          rustup update || exit 1
-          cargo install cargo-audit || exit 1
-          gem install brakeman || exit 1
+          pip install bandit
 
-          sudo apt-get install -y hadolint shellcheck cppcheck clang-tools || exit 1
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+          
+          composer global require phpstan/phpstan
+          composer global require vimeo/psalm
+
+          npm install -g snyk eslint npm-audit
+
+          rustup update
+          cargo install cargo-audit
+
+          # Set up Bundler and install Brakeman
+          echo "source 'https://rubygems.org'" > Gemfile
+          echo "gem 'brakeman'" >> Gemfile
+          gem install bundler
+          bundle install --path vendor/bundle  # Install gems in a local directory
+
+          sudo apt-get install -y hadolint shellcheck cppcheck clang-tools
 
       - name: Detect Modified Files
         id: detect_files
@@ -73,13 +82,13 @@ jobs:
           scan_file() {
             local file="$1"
             local tool="$2"
-            output=$($tool "$file" || echo "Tool execution failed")  # Capture output while preventing failure
+            output=$($tool "$file" || echo "Tool execution failed")  
             exit_status=$?
             if [ $exit_status -ne 0 ]; then
               error_flag=1
               issue_count=$(echo "$output" | wc -l)
               summary_report+="| $file | $(basename "$tool") | $issue_count |\n"
-              echo "::error file=$file::Security tool output:\n\`\`\`\n$output\n\`\`\`" # GitHub annotation
+              echo "::error file=$file::Security tool output:\n\`\`\`\n$output\n\`\`\`"
               echo -e "## Tool output for $file\n\`\`\`\n$output\n\`\`\`" >> "$details_file"
             fi
           }
@@ -95,7 +104,7 @@ jobs:
                 *.php) scan_file "$file" "phpstan analyse \"$file\" && psalm \"$file\"" ;;  
                 *.c) scan_file "$file" "cppcheck \"$file\"" ;;              
                 *.cpp) scan_file "$file" "cppcheck \"$file\"" ;;            
-                *.rb) scan_file "$file" "brakeman -o output.json -A all; cat output.json" ;; 
+                *.rb) scan_file "$file" "bundle exec brakeman -o output.json -A all; cat output.json" ;; 
                 *.rs) scan_file "$file" "cargo audit" ;;                   
                 *.r) scan_file "$file" "lintr \"$file\"" ;;                
               esac
@@ -141,4 +150,4 @@ jobs:
       - name: Cleanup Temporary Files
         run: |
           echo "Cleaning up temporary files..."
-          rm -f modified_files.txt security_details.md || true  # Ignore errors if files do not exist
+          rm -f modified_files.txt security_details.md Gemfile vendor/bundle || true
