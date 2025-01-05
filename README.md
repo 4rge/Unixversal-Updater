@@ -10,6 +10,7 @@ This script is designed to automate the process of updating and upgrading system
 - **Backup Configuration**: Creates a backup of user configuration files before performing upgrades.
 - **GPU Identification**: Displays the detected GPU model using `lspci`.
 - **Color-Coded Messages**: Provides feedback on script execution status using different colors for success, error, warning, and information messages.
+-  **Install Additional Packages**: Accepts package names as command-line arguments, prompting the user to confirm their installation during the update process, allowing for the seamless addition of specific software packages alongside system upgrades.
 
 ## Requirements
 
