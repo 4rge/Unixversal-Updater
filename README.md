@@ -1,12 +1,11 @@
 # *nixversal Updater Script
 
-This script is designed to automate the process of updating and upgrading system packages across various Linux distributions. It includes functionalities to check for necessary utilities, identify the package manager, and manage CPU microcode installations. Additionally, it provides automated daily maintenance through a scheduled cron job or systemd timer.
+This script is designed to automate the process of updating and upgrading system packages across various Linux distributions. It includes functionalities to check for necessary utilities, identify the package manager, and manage CPU microcode installations.
 
 ## Features
 
 - **Cross-Distro Support**: Detects the type of Linux distribution and uses the appropriate package manager (`apt`, `dnf`, `pacman`, etc.).
 - **Microcode Management**: Checks and installs/updates CPU microcode based on the detected CPU model (Intel or AMD).
-- **Automated Maintenance Tasks**: Sets up a recurring daily maintenance task using a systemd timer or cron job to clean and update packages automatically.
 - **Backup Configuration**: Creates a backup of user configuration files before performing upgrades.
 - **GPU Identification**: Displays the detected GPU model using `lspci`.
 - **Color-Coded Messages**: Provides feedback on script execution status using different colors for success, error, warning, and information messages.
