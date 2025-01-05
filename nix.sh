@@ -62,7 +62,43 @@ set_update_upgrade_cmds() {
 # Update and upgrade packages
 update_packages() {
   eval "$update_cmd >/dev/null 2>&1" && msg GREEN "Repositories updated successfully." || msg RED "Failed to update repositories."
+
+  # If arguments are passed, collect and prompt to install them
+  if [ "$#" -gt 0 ]; then
+    additional_packages="$*"
+    msg YELLOW "The following additional packages will be installed: $additional_packages"
+    read -p "Do you want to install these packages? (y/n): " answer
+    if [ "$answer" != "y" ]; then
+      msg YELLOW "Skipping installation of additional packages."
+      return
+    fi
+
+    # Add additional packages to the upgrade command based on package manager
+    case "$pkg_manager" in
+      apt|dnf|yum|pacman|slackpkg|apk) upgrade_cmd="$upgrade_cmd $additional_packages" ;;
+    esac
+  fi
+
   eval "$upgrade_cmd >/dev/null 2>&1" && msg GREEN "Packages upgraded successfully." || msg RED "Failed to upgrade packages."
+
+  # Verify installation of additional packages
+  for pkg in $additional_packages; do
+    case "$pkg_manager" in
+      apt) check_cmd="dpkg -l | grep -w $pkg" ;;
+      dnf|yum) check_cmd="rpm -q $pkg" ;;
+      pacman) check_cmd="pacman -Qi $pkg" ;;
+      slackpkg) check_cmd="slackpkg search | grep -w $pkg" ;;
+      apk) check_cmd="apk info -e $pkg" ;;
+      pkg_add) check_cmd="pkg info | grep -w $pkg" ;;
+      *) msg RED "Unsupported package manager. Cannot verify installation."; return ;;
+    esac
+
+    if eval "$check_cmd >/dev/null 2>&1"; then
+      msg GREEN "$pkg was installed successfully."
+    else
+      msg RED "Failed to install $pkg."
+    fi
+  done
 }
 
 # Check and install microcode for CPUs
@@ -142,7 +178,7 @@ main() {
   check_virtualization && (msg YELLOW "Running upgrades only due to virtualization.") || msg CYAN "Running full update process."
   set_pkg_manager
   set_update_upgrade_cmds
-  update_packages
+  update_packages "$@"
   install_microcode
   identify_gpu
   msg GREEN "Update complete."
