@@ -81,6 +81,58 @@ set_update_upgrade_cmds() {
   upgrade_cmd=${upgrade_commands[$pkg_manager]}
 }
 
+# Ensure the utility for checking installation
+is_installed() {
+  case "$pkg_manager" in
+    apt) dpkg -l | grep -qw "$1" ;;
+    dnf) rpm -q "$1" >/dev/null ;;
+    pacman) pacman -Qi "$1" >/dev/null ;;
+    slackpkg) slackpkg search | grep -qw "$1" ;;
+    apk) apk info -e "$1" >/dev/null ;;
+    pkg|pkg_add) pkg info | grep -qw "$1" ;;
+  esac
+}
+
+# Get installed and latest package versions
+get_package_version() {
+  local pkg_name="$1"
+  local installed_version
+  local latest_version
+
+  case "$pkg_manager" in
+    apt)
+      installed_version=$(dpkg -s "$pkg_name" | grep 'Version:' | awk '{print $2}')
+      latest_version=$(apt-cache policy "$pkg_name" | grep 'Candidate:' | awk '{print $2}')
+      ;;
+    dnf)
+      installed_version=$(rpm -q "$pkg_name" --queryformat '%{VERSION}-%{RELEASE}\n')
+      latest_version=$(dnf info "$pkg_name" | grep 'Version' | awk '{print $3}')
+      ;;
+    pacman)
+      installed_version=$(pacman -Qi "$pkg_name" | grep 'Version' | awk '{print $3}')
+      latest_version=$(pacman -Si "$pkg_name" | grep 'Version' | awk '{print $3}')
+      ;;
+    slackpkg)
+      installed_version=$(slackpkg search | grep -w "$pkg_name" | awk '{print $2}')
+      latest_version=${installed_version}  # Placeholder, slackpkg doesn't handle this well
+      ;;
+    apk)
+      installed_version=$(apk info -v "$pkg_name")
+      latest_version=$(apk search -v "$pkg_name" | head -n1 | awk '{print $2}')
+      ;;
+    pkg|pkg_add)
+      installed_version=$(pkg info "$pkg_name" | awk -F ' ' '{print $2}')
+      latest_version=$(pkg search -e "$pkg_name" | awk -F ' ' '{print $2}')
+      ;;
+    *)
+      msg RED "Unable to determine version information for package manager: $pkg_manager."
+      return 1
+      ;;
+  esac
+
+  echo "$installed_version" "$latest_version"
+}
+
 # Update and upgrade packages
 update_packages() {
   if eval "$update_cmd >/dev/null 2>&1"; then
@@ -94,7 +146,6 @@ update_packages() {
   if [ "$#" -gt 0 ]; then
     additional_packages="$*"
     msg YELLOW "The following additional packages will be installed: $additional_packages"
-    # Colorizing the question prompt
     read -p "$(echo -e "${CYAN}Do you want to install these packages? (y/n): ${RESET}") " answer
     [ "$answer" != "y" ] && { msg YELLOW "Skipping installation of additional packages."; return; }
     
@@ -110,17 +161,9 @@ update_packages() {
   fi
 
   for pkg in $additional_packages; do
-    check_cmd=$(case "$pkg_manager" in
-      apt) echo "dpkg -l | grep -w $pkg" ;;
-      dnf) echo "rpm -q $pkg" ;;
-      pacman) echo "pacman -Qi $pkg" ;;
-      slackpkg) echo "slackpkg search | grep -w $pkg" ;;
-      apk) echo "apk info -e $pkg" ;;
-      pkg|pkg_add) echo "pkg info | grep -w $pkg" ;;  # Using pkg for FreeBSD
-    esac)
-
-    if eval "$check_cmd >/dev/null 2>&1"; then
-      msg GREEN "$pkg was installed successfully."
+    if is_installed "$pkg"; then
+      installed_version, latest_version=$(get_package_version "$pkg")
+      msg GREEN "$pkg was installed successfully (version: $installed_version)."
     else
       msg RED "Failed to install $pkg."
     fi
@@ -130,7 +173,7 @@ update_packages() {
 # Check and install microcode for CPUs
 install_microcode() {
   CPU_MODEL=$(lscpu | awk -F': ' '/Model name/{print $2}')
-  
+
   # Determine the microcode package based on CPU type
   case "$CPU_MODEL" in 
     *Intel*) microcode_package="intel-ucode" ;; 
@@ -139,32 +182,14 @@ install_microcode() {
   esac
 
   # Check if the microcode package is already installed
-  if eval "$pkg_manager -q $microcode_package >/dev/null 2>&1"; then
+  if is_installed "$microcode_package"; then
     msg GREEN "$microcode_package is already installed."
 
-    # Check for the version of the installed microcode
-    case "$pkg_manager" in
-      apt)
-        installed_version=$(dpkg -s "$microcode_package" | grep 'Version:' | awk '{print $2}')
-        latest_version=$(apt-cache policy "$microcode_package" | grep 'Candidate:' | awk '{print $2}')
-        ;;
-      dnf|yum)
-        installed_version=$(rpm -q "$microcode_package" --queryformat '%{VERSION}-%{RELEASE}\n')
-        latest_version=$(dnf info "$microcode_package" | grep 'Version' | awk '{print $3}')
-        ;;
-      pacman)
-        installed_version=$(pacman -Qi "$microcode_package" | grep 'Version' | awk '{print $3}')
-        latest_version=$(pacman -Si "$microcode_package" | grep 'Version' | awk '{print $3}')
-        ;;
-      *)
-        msg RED "Unable to determine version information for package manager: $pkg_manager."
-        return
-        ;;
-    esac
+    # Use the new function to get installed and latest versions
+    read installed_version latest_version < <(get_package_version "$microcode_package")
 
     if [ "$installed_version" != "$latest_version" ]; then
       msg YELLOW "Update available for $microcode_package: $installed_version -> $latest_version."
-      # Colorizing the question prompt
       read -p "$(echo -e "${CYAN}Do you want to update $microcode_package? (y/n): ${RESET}") " answer
       if [ "$answer" = "y" ]; then
         install_cmd="sudo $pkg_manager ${pkg_manager:+-S} $microcode_package"
@@ -180,7 +205,6 @@ install_microcode() {
       msg GREEN "$microcode_package is already up to date."
     fi
   else
-    # Colorizing the question prompt
     read -p "$(echo -e "${CYAN}Do you want to install $microcode_package? (y/n): ${RESET}") " answer
     if [ "$answer" = "y" ]; then
       install_cmd="sudo $pkg_manager ${pkg_manager:+-S} $microcode_package"
