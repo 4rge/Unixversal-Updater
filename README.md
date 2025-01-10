@@ -42,7 +42,6 @@ You may customize the behavior of the script by modifying the following sections
 
 - **Color Definitions**: Adjust the color schemes by changing the ANSI escape codes defined at the beginning of the script.
 - **Packages**: Add or change the definitions for the microcode packages if your CPU model is not covered.
-- **Maintenance Schedule**: Modify the time for the scheduled maintenance tasks within the `setup_tasks` function in the script.
 
 ## Troubleshooting
 
