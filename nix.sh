@@ -17,10 +17,6 @@ display_banner() {
   echo -e "${CYAN}=============================="
   echo -e "        SYSTEM UPDATER        "
   echo -e "=============================="
-  echo -e "${GREEN}Success: completed operations"
-  echo -e "${RED}Error: something went wrong"
-  echo -e "${YELLOW}Warning: potential issues"
-  echo -e "${CYAN}Info: additional context"
 }
 
 # Check necessary utilities
@@ -33,65 +29,95 @@ check_virtualization() {
   lspci | grep -qiE "Hypervisor|VirtualBox|VMware|QEMU|Parallels"
 }
 
+# Consolidated package manager and command mappings
+declare -A pkg_info
+pkg_info["ubuntu"]="apt"
+pkg_info["debian"]="apt"
+pkg_info["mint"]="apt"
+pkg_info["kali"]="apt"
+pkg_info["parrot"]="apt"
+pkg_info["fedora"]="dnf"
+pkg_info["rhel"]="dnf"
+pkg_info["centos"]="dnf"
+pkg_info["clearos"]="dnf"
+pkg_info["arch"]="pacman"
+pkg_info["manjaro"]="pacman"
+pkg_info["arcolinux"]="pacman"
+pkg_info["slackware"]="slackpkg"
+pkg_info["salix"]="slackpkg"
+pkg_info["alpine"]="apk"
+pkg_info["freebsd"]="pkg"
+pkg_info["openbsd"]="pkg_add"
+pkg_info["netbsd"]="pkg_add"
+
+# Update and upgrade commands mapping
+declare -A update_commands
+update_commands["apt"]="apt update"
+update_commands["dnf"]="dnf makecache"
+update_commands["pacman"]="pacman -Sy"
+update_commands["slackpkg"]="slackpkg update"
+update_commands["apk"]="apk update"
+update_commands["pkg"]="pkg update"
+update_commands["pkg_add"]="pkg_add -u"
+
+declare -A upgrade_commands
+upgrade_commands["apt"]="apt upgrade -y"
+upgrade_commands["dnf"]="dnf upgrade -y"
+upgrade_commands["pacman"]="pacman -Su --noconfirm"
+upgrade_commands["slackpkg"]="slackpkg upgrade-all"
+upgrade_commands["apk"]="apk upgrade"
+upgrade_commands["pkg"]="pkg upgrade"
+
 # Identify package manager
 set_pkg_manager() {
   . /etc/os-release || { msg RED "Cannot detect distribution."; exit 1; }
-  case "$ID" in
-    ubuntu|debian|mint|kali|parrot) pkg_manager="apt" ;;
-    fedora|rhel|centos|clearos) pkg_manager="dnf" ;;
-    arch|manjaro|arcolinux) pkg_manager="pacman" ;;
-    slackware|salix) pkg_manager="slackpkg" ;;
-    alpine) pkg_manager="apk" ;;
-    freebsd|openbsd|netbsd) pkg_manager="pkg_add" ;;
-    *) msg RED "Unsupported distribution: $ID."; exit 1 ;;
-  esac
+  pkg_manager=${pkg_info[$ID]}
+  [ -z "$pkg_manager" ] && { msg RED "Unsupported distribution: $ID."; exit 1; }
 }
 
 # Set update and upgrade commands
 set_update_upgrade_cmds() {
-  case "$pkg_manager" in
-    apt) update_cmd="apt update"; upgrade_cmd="apt upgrade -y" ;;
-    dnf|yum) update_cmd="$pkg_manager makecache"; upgrade_cmd="$pkg_manager upgrade -y" ;;
-    pacman) update_cmd="pacman -Sy"; upgrade_cmd="pacman -Su --noconfirm" ;;
-    slackpkg) update_cmd="slackpkg update"; upgrade_cmd="slackpkg upgrade-all" ;;
-    apk) update_cmd="apk update"; upgrade_cmd="apk upgrade" ;;
-    pkg_add) update_cmd="pkg update"; upgrade_cmd="pkg upgrade" ;;
-  esac
+  update_cmd=${update_commands[$pkg_manager]}
+  upgrade_cmd=${upgrade_commands[$pkg_manager]}
 }
 
 # Update and upgrade packages
 update_packages() {
-  eval "$update_cmd >/dev/null 2>&1" && msg GREEN "Repositories updated successfully." || msg RED "Failed to update repositories."
+  if eval "$update_cmd >/dev/null 2>&1"; then
+    msg GREEN "Repositories updated successfully."
+  else
+    msg RED "Failed to update repositories."
+    eval "$update_cmd"  # Show what went wrong
+    return 1
+  fi
 
-  # If arguments are passed, collect and prompt to install them
   if [ "$#" -gt 0 ]; then
     additional_packages="$*"
     msg YELLOW "The following additional packages will be installed: $additional_packages"
-    read -p "Do you want to install these packages? (y/n): " answer
-    if [ "$answer" != "y" ]; then
-      msg YELLOW "Skipping installation of additional packages."
-      return
-    fi
-
-    # Add additional packages to the upgrade command based on package manager
-    case "$pkg_manager" in
-      apt|dnf|yum|pacman|slackpkg|apk) upgrade_cmd="$upgrade_cmd $additional_packages" ;;
-    esac
+    # Colorizing the question prompt
+    read -p "$(echo -e "${CYAN}Do you want to install these packages? (y/n): ${RESET}") " answer
+    [ "$answer" != "y" ] && { msg YELLOW "Skipping installation of additional packages."; return; }
+    
+    upgrade_cmd="$upgrade_cmd $additional_packages"
   fi
 
-  eval "$upgrade_cmd >/dev/null 2>&1" && msg GREEN "Packages upgraded successfully." || msg RED "Failed to upgrade packages."
+  if eval "$upgrade_cmd >/dev/null 2>&1"; then
+    msg GREEN "Packages upgraded successfully."
+  else
+    msg RED "Failed to upgrade packages."
+    eval "$upgrade_cmd"  # Show what went wrong
+    return
+  fi
 
-  # Verify installation of additional packages
   for pkg in $additional_packages; do
-    case "$pkg_manager" in
-      apt) check_cmd="dpkg -l | grep -w $pkg" ;;
-      dnf|yum) check_cmd="rpm -q $pkg" ;;
-      pacman) check_cmd="pacman -Qi $pkg" ;;
-      slackpkg) check_cmd="slackpkg search | grep -w $pkg" ;;
-      apk) check_cmd="apk info -e $pkg" ;;
-      pkg_add) check_cmd="pkg info | grep -w $pkg" ;;
-      *) msg RED "Unsupported package manager. Cannot verify installation."; return ;;
-    esac
+    check_cmd=$(case "$pkg_manager" in
+      apt) echo "dpkg -l | grep -w $pkg" ;;
+      dnf) echo "rpm -q $pkg" ;;
+      pacman) echo "pacman -Qi $pkg" ;;
+      slackpkg) echo "slackpkg search | grep -w $pkg" ;;
+      apk) echo "apk info -e $pkg" ;;
+      pkg|pkg_add) echo "pkg info | grep -w $pkg" ;;  # Using pkg for FreeBSD
+    esac)
 
     if eval "$check_cmd >/dev/null 2>&1"; then
       msg GREEN "$pkg was installed successfully."
@@ -106,34 +132,40 @@ install_microcode() {
   CPU_MODEL=$(lscpu | awk -F': ' '/Model name/{print $2}')
   
   # Determine the microcode package based on CPU type
-  microcode_package=$(case "$CPU_MODEL" in 
-                        *Intel*) echo "intel-ucode" ;; 
-                        *AMD*) echo "amd-ucode" ;; 
-                        *) return ;; 
-                      esac)
+  case "$CPU_MODEL" in 
+    *Intel*) microcode_package="intel-ucode" ;; 
+    *AMD*) microcode_package="amd-ucode" ;; 
+    *) return ;; 
+  esac
 
   # Check if the microcode package is already installed
   if eval "$pkg_manager -q $microcode_package >/dev/null 2>&1"; then
     msg GREEN "$microcode_package is already installed."
 
     # Check for the version of the installed microcode
-    if [ "$pkg_manager" = "apt" ]; then
-      installed_version=$(dpkg -s "$microcode_package" | grep 'Version:' | awk '{print $2}')
-      latest_version=$(apt-cache policy "$microcode_package" | grep 'Candidate:' | awk '{print $2}')
-    elif [ "$pkg_manager" = "dnf" ] || [ "$pkg_manager" = "yum" ]; then
-      installed_version=$(rpm -q "$microcode_package" --queryformat '%{VERSION}-%{RELEASE}\n')
-      latest_version=$(dnf info "$microcode_package" | grep 'Version' | awk '{print $3}')
-    elif [ "$pkg_manager" = "pacman" ]; then
-      installed_version=$(pacman -Qi "$microcode_package" | grep 'Version' | awk '{print $3}')
-      latest_version=$(pacman -Si "$microcode_package" | grep 'Version' | awk '{print $3}')
-    else
-      msg RED "Unable to determine version information for package manager: $pkg_manager."
-      return
-    fi
+    case "$pkg_manager" in
+      apt)
+        installed_version=$(dpkg -s "$microcode_package" | grep 'Version:' | awk '{print $2}')
+        latest_version=$(apt-cache policy "$microcode_package" | grep 'Candidate:' | awk '{print $2}')
+        ;;
+      dnf|yum)
+        installed_version=$(rpm -q "$microcode_package" --queryformat '%{VERSION}-%{RELEASE}\n')
+        latest_version=$(dnf info "$microcode_package" | grep 'Version' | awk '{print $3}')
+        ;;
+      pacman)
+        installed_version=$(pacman -Qi "$microcode_package" | grep 'Version' | awk '{print $3}')
+        latest_version=$(pacman -Si "$microcode_package" | grep 'Version' | awk '{print $3}')
+        ;;
+      *)
+        msg RED "Unable to determine version information for package manager: $pkg_manager."
+        return
+        ;;
+    esac
 
     if [ "$installed_version" != "$latest_version" ]; then
       msg YELLOW "Update available for $microcode_package: $installed_version -> $latest_version."
-      read -p "Do you want to update $microcode_package? (y/n): " answer
+      # Colorizing the question prompt
+      read -p "$(echo -e "${CYAN}Do you want to update $microcode_package? (y/n): ${RESET}") " answer
       if [ "$answer" = "y" ]; then
         install_cmd="sudo $pkg_manager ${pkg_manager:+-S} $microcode_package"
         if eval "$install_cmd"; then 
@@ -148,7 +180,8 @@ install_microcode() {
       msg GREEN "$microcode_package is already up to date."
     fi
   else
-    read -p "Do you want to install $microcode_package? (y/n): " answer
+    # Colorizing the question prompt
+    read -p "$(echo -e "${CYAN}Do you want to install $microcode_package? (y/n): ${RESET}") " answer
     if [ "$answer" = "y" ]; then
       install_cmd="sudo $pkg_manager ${pkg_manager:+-S} $microcode_package"
       if eval "$install_cmd"; then 
@@ -165,11 +198,7 @@ install_microcode() {
 # Identify GPU
 identify_gpu() {
   GPU_MODEL=$(lspci | grep -i vga | awk -F ': ' '{print $2}')
-  if [ -n "$GPU_MODEL" ]; then
-    msg GREEN "Detected GPU: $GPU_MODEL."
-  else
-    msg RED "No GPU detected."
-  fi
+  [ -n "$GPU_MODEL" ] && msg GREEN "Detected GPU: $GPU_MODEL." || msg RED "No GPU detected."
 }
 
 # Main function
