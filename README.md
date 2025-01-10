@@ -32,9 +32,7 @@ The script will perform the following actions:
 3. Identify and set the package manager based on the operating system.
 4. Update the package repositories and upgrade installed packages.
 5. Check for the appropriate CPU microcode package, prompting for installation or update if necessary.
-6. Create a backup of user configuration files located in `~/.config`.
-7. Identify and display the detected GPU model.
-8. Schedule automated daily maintenance tasks to run at 02:00.
+6. Identify and display the detected GPU model.
 
 ## Customization
 
