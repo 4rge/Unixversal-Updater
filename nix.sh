@@ -31,42 +31,25 @@ check_virtualization() {
 
 # Consolidated package manager and command mappings
 declare -A pkg_info
-pkg_info["ubuntu"]="apt"
-pkg_info["debian"]="apt"
-pkg_info["mint"]="apt"
-pkg_info["kali"]="apt"
-pkg_info["parrot"]="apt"
-pkg_info["fedora"]="dnf"
-pkg_info["rhel"]="dnf"
-pkg_info["centos"]="dnf"
-pkg_info["clearos"]="dnf"
-pkg_info["arch"]="pacman"
-pkg_info["manjaro"]="pacman"
-pkg_info["arcolinux"]="pacman"
-pkg_info["slackware"]="slackpkg"
-pkg_info["salix"]="slackpkg"
-pkg_info["alpine"]="apk"
-pkg_info["freebsd"]="pkg"
-pkg_info["openbsd"]="pkg_add"
-pkg_info["netbsd"]="pkg_add"
+pkg_info=( ["ubuntu"]="apt" ["debian"]="apt" ["mint"]="apt" ["kali"]="apt" ["parrot"]="apt"
+            ["fedora"]="dnf" ["rhel"]="dnf" ["centos"]="dnf" ["clearos"]="dnf"
+            ["arch"]="pacman" ["manjaro"]="pacman" ["arcolinux"]="pacman"
+            ["slackware"]="slackpkg" ["salix"]="slackpkg" ["alpine"]="apk"
+            ["freebsd"]="pkg" ["openbsd"]="pkg_add" ["netbsd"]="pkg_add" )
 
 # Update and upgrade commands mapping
 declare -A update_commands
-update_commands["apt"]="apt update"
-update_commands["dnf"]="dnf makecache"
-update_commands["pacman"]="pacman -Sy"
-update_commands["slackpkg"]="slackpkg update"
-update_commands["apk"]="apk update"
-update_commands["pkg"]="pkg update"
-update_commands["pkg_add"]="pkg_add -u"
+update_commands=( ["apt"]="apt update" ["dnf"]="dnf makecache" ["pacman"]="pacman -Sy"
+                  ["slackpkg"]="slackpkg update" ["apk"]="apk update" ["pkg"]="pkg update"
+                  ["pkg_add"]="pkg_add -u" )
 
 declare -A upgrade_commands
-upgrade_commands["apt"]="apt upgrade -y"
-upgrade_commands["dnf"]="dnf upgrade -y"
-upgrade_commands["pacman"]="pacman -Su --noconfirm"
-upgrade_commands["slackpkg"]="slackpkg upgrade-all"
-upgrade_commands["apk"]="apk upgrade"
-upgrade_commands["pkg"]="pkg upgrade"
+upgrade_commands=( ["apt"]="apt upgrade -y" ["dnf"]="dnf upgrade -y" ["pacman"]="pacman -Su --noconfirm"
+                   ["slackpkg"]="slackpkg upgrade-all" ["apk"]="apk upgrade" ["pkg"]="pkg upgrade" )
+
+# CPU Microcode Packages mapping
+declare -A microcode_packages
+microcode_packages=( ["Intel"]="intel-ucode" ["AMD"]="amd-ucode" )
 
 # Identify package manager
 set_pkg_manager() {
@@ -83,13 +66,15 @@ set_update_upgrade_cmds() {
 
 # Ensure the utility for checking installation
 is_installed() {
+  local pkg_name="$1"
   case "$pkg_manager" in
-    apt) dpkg -l | grep -qw "$1" ;;
-    dnf) rpm -q "$1" >/dev/null ;;
-    pacman) pacman -Qi "$1" >/dev/null ;;
-    slackpkg) slackpkg search | grep -qw "$1" ;;
-    apk) apk info -e "$1" >/dev/null ;;
-    pkg|pkg_add) pkg info | grep -qw "$1" ;;
+    apt) dpkg -l | grep -qw "$pkg_name" && return 0 || return 1 ;;
+    dnf) rpm -q "$pkg_name" >/dev/null && return 0 || return 1 ;;
+    pacman) pacman -Qi "$pkg_name" >/dev/null && return 0 || return 1 ;;
+    slackpkg) slackpkg search | grep -qw "$pkg_name" && return 0 || return 1 ;;
+    apk) apk info -e "$pkg_name" >/dev/null && return 0 || return 1 ;;
+    pkg|pkg_add) pkg info | grep -qw "$pkg_name" && return 0 || return 1 ;;
+    *) msg RED "Unsupported package manager: $pkg_manager." && return 1 ;;
   esac
 }
 
@@ -135,13 +120,11 @@ get_package_version() {
 
 # Update and upgrade packages
 update_packages() {
-  if eval "$update_cmd >/dev/null 2>&1"; then
-    msg GREEN "Repositories updated successfully."
-  else
+  eval "$update_cmd >/dev/null 2>&1" && msg GREEN "Repositories updated successfully." || {
     msg RED "Failed to update repositories."
     eval "$update_cmd"  # Show what went wrong
     return 1
-  fi
+  }
 
   if [ "$#" -gt 0 ]; then
     additional_packages="$*"
@@ -152,21 +135,17 @@ update_packages() {
     upgrade_cmd="$upgrade_cmd $additional_packages"
   fi
 
-  if eval "$upgrade_cmd >/dev/null 2>&1"; then
-    msg GREEN "Packages upgraded successfully."
-  else
+  eval "$upgrade_cmd >/dev/null 2>&1" && msg GREEN "Packages upgraded successfully." || {
     msg RED "Failed to upgrade packages."
     eval "$upgrade_cmd"  # Show what went wrong
     return
-  fi
+  }
 
   for pkg in $additional_packages; do
-    if is_installed "$pkg"; then
-      installed_version, latest_version=$(get_package_version "$pkg")
+    is_installed "$pkg" && {
+      read installed_version latest_version < <(get_package_version "$pkg")
       msg GREEN "$pkg was installed successfully (version: $installed_version)."
-    else
-      msg RED "Failed to install $pkg."
-    fi
+    } || msg RED "Failed to install $pkg."
   done
 }
 
@@ -174,49 +153,33 @@ update_packages() {
 install_microcode() {
   CPU_MODEL=$(lscpu | awk -F': ' '/Model name/{print $2}')
 
-  # Determine the microcode package based on CPU type
-  case "$CPU_MODEL" in 
-    *Intel*) microcode_package="intel-ucode" ;; 
-    *AMD*) microcode_package="amd-ucode" ;; 
-    *) return ;; 
-  esac
+  for key in "${!microcode_packages[@]}"; do
+    echo "$CPU_MODEL" | grep -qi "$key" && {
+      microcode_package="${microcode_packages[$key]}"
+      break
+    }
+  done
 
-  # Check if the microcode package is already installed
-  if is_installed "$microcode_package"; then
+  [ -z "$microcode_package" ] && return 
+
+  is_installed "$microcode_package" && {
     msg GREEN "$microcode_package is already installed."
-
-    # Use the new function to get installed and latest versions
     read installed_version latest_version < <(get_package_version "$microcode_package")
-
-    if [ "$installed_version" != "$latest_version" ]; then
+    [ "$installed_version" != "$latest_version" ] && {
       msg YELLOW "Update available for $microcode_package: $installed_version -> $latest_version."
       read -p "$(echo -e "${CYAN}Do you want to update $microcode_package? (y/n): ${RESET}") " answer
-      if [ "$answer" = "y" ]; then
+      [ "$answer" = "y" ] && {
         install_cmd="sudo $pkg_manager ${pkg_manager:+-S} $microcode_package"
-        if eval "$install_cmd"; then 
-          msg GREEN "Microcode updated successfully for $CPU_MODEL."; 
-        else 
-          msg RED "Failed to update microcode for $CPU_MODEL."; 
-        fi
-      else
-        msg YELLOW "Skipping microcode update for $CPU_MODEL."
-      fi
-    else
-      msg GREEN "$microcode_package is already up to date."
-    fi
-  else
+        eval "$install_cmd" && msg GREEN "Microcode updated successfully for $CPU_MODEL." || msg RED "Failed to update microcode for $CPU_MODEL."
+      } || msg YELLOW "Skipping microcode update for $CPU_MODEL."
+    } || msg GREEN "$microcode_package is already up to date."
+  } || {
     read -p "$(echo -e "${CYAN}Do you want to install $microcode_package? (y/n): ${RESET}") " answer
-    if [ "$answer" = "y" ]; then
+    [ "$answer" = "y" ] && {
       install_cmd="sudo $pkg_manager ${pkg_manager:+-S} $microcode_package"
-      if eval "$install_cmd"; then 
-        msg GREEN "Microcode installed successfully for $CPU_MODEL."; 
-      else 
-        msg RED "Failed to install microcode for $CPU_MODEL."; 
-      fi
-    else
-      msg YELLOW "Skipping installation of microcode for $CPU_MODEL."
-    fi
-  fi
+      eval "$install_cmd" && msg GREEN "Microcode installed successfully for $CPU_MODEL." || msg RED "Failed to install microcode for $CPU_MODEL."
+    } || msg YELLOW "Skipping installation of microcode for $CPU_MODEL."
+  }
 }
 
 # Identify GPU
