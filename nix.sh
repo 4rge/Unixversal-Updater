@@ -15,7 +15,7 @@ msg() {
 # Display a banner
 display_banner() {
   echo -e "${CYAN}=============================="
-  echo -e "        SYSTEM UPDATER        "
+  echo -e "        *NIXVERSAL UPDATER        "
   echo -e "=============================="
 }
 
